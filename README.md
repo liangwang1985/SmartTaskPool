@@ -9,6 +9,8 @@
 - Classify Thread Pool
 - Self-Adaption Pool Capacity
 - Pools & Queues State Monitor
+- Support Task Async excute with delay  支持任务延迟执行
+- Pool not exit when there is not task, bug wait new task forever 任务池没有任务时不自动退出,而是无限等待新任务到达
 
 ## Framework
 
