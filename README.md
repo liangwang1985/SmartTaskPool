@@ -3,7 +3,7 @@
 [![pipeline status](https://gitlab.com/leosocy/SmartThreadPool/badges/master/pipeline.svg)](https://gitlab.com/leosocy/SmartThreadPool/commits/master)
 [![MIT licensed](https://img.shields.io/badge/license-MIT-green.svg)](https://raw.githubusercontent.com/PalmID/ppic/master/LICENSE)
 
-支持任务延迟执行任务池
+支持任务延迟执行的任务池
 
 ## Features
 
