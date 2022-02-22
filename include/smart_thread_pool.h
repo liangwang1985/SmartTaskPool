@@ -97,50 +97,93 @@ namespace stp {
   //   uint8_t g_auto_increment_thread_pool_id = 0;
   // }   // namespace detail
 
-  // Definition of a Semaphore class that one can use for notifying, wait and
-  // and wait for a period of time. Because C++ does not have a built-in semaphore
-  // until C++20, it is necessary to define one if it is convenient to use it. 
   class Semaphore {
-  public:
-    // Default count is zero, which means calling Wait() immediately after
-    // constructor this thread will go to sleep (waiting for count > 0)
-    Semaphore(unsigned int count = 0) : count_(count) {}
+    public:
+        Semaphore(int value=1): count{value}, wakeups{0} {}
 
-    // Increment the counter and notify one of the thread that there is one 
-    // available
-    void Notify(){
-      std::unique_lock<std::mutex> lock(mutex_);
-      count_++;
-      condition_variable_.notify_one();
-    }
+        void Notify(){
+            std::unique_lock<std::mutex> lock(mutex_);
+            if(++count<=0) { // have some thread suspended ?
+                ++wakeups;
+                condition_variable_.notify_one(); // notify one !
+            }
+        }
+        
+        template <class Clock, class Duration>
+        bool WaitUntil(const std::chrono::time_point<Clock, Duration>& deadline) {
+          std::unique_lock<std::mutex> lock(mutex_);
+          if (--count < 0) { // count is not enough ?
+              if(!condition_variable_.wait_until(lock, deadline,[this]()->bool{ return wakeups>0;})){
+                count++;
+                return false;
+              }
+              --wakeups;  // ok, me wakeup !
+          }
+          return true;
+        }
+        
+        void Wait(){
+            std::unique_lock<std::mutex> lock(mutex_);
+            if (--count < 0){
+                // condition_variable_.wait(lock,[this]()->bool{ return wakeups>0;});
+                condition_variable_.wait(lock, 
+                  [this]()->bool{ return wakeups>0;}); // suspend and wait ...
+                --wakeups;  // ok, me wakeup !
+            }
+        }
+    private:
+        int count;
+        int wakeups;
+        std::mutex mutex_;
+        std::condition_variable condition_variable_;
+    };
 
-    // Wait for the counter to become positive, and consume one by decrementing
-    void Wait(){
-      std::unique_lock<std::mutex> lock(mutex_);
-      condition_variable_.wait(lock, [this]() { return count_ > 0; });
-      count_--;
-    }
 
-    // Wait for the counter to become positive until a specified time point at
-    // deadline. If the counter becomes positive then consume it and return true,
-    // otherwise return false
-    template <class Clock, class Duration>
-    bool WaitUntil(const std::chrono::time_point<Clock, Duration>& deadline) {
-      std::unique_lock<std::mutex> lock(mutex_);
-      if (!condition_variable_.wait_until(lock, deadline, [this]() {
-        return count_ > 0; })) {
-        return false;
-      }
 
-      count_--;
-      return true;
-    }
+  // // Definition of a Semaphore class that one can use for notifying, wait and
+  // // and wait for a period of time. Because C++ does not have a built-in semaphore
+  // // until C++20, it is necessary to define one if it is convenient to use it. 
+  // class Semaphore {
+  // public:
+  //   // Default count is zero, which means calling Wait() immediately after
+  //   // constructor this thread will go to sleep (waiting for count > 0)
+  //   Semaphore(unsigned int count = 0) : count_(count) {}
 
-  private:
-    std::mutex mutex_;
-    std::condition_variable condition_variable_;
-    unsigned int count_;
-  };
+  //   // Increment the counter and notify one of the thread that there is one 
+  //   // available
+  //   void Notify(){
+  //     std::unique_lock<std::mutex> lock(mutex_);
+  //     count_++;
+  //     condition_variable_.notify_one();
+  //   }
+
+  //   // Wait for the counter to become positive, and consume one by decrementing
+  //   void Wait(){
+  //     std::unique_lock<std::mutex> lock(mutex_);
+  //     condition_variable_.wait(lock, [this]() { return count_ > 0; });
+  //     count_--;
+  //   }
+
+  //   // Wait for the counter to become positive until a specified time point at
+  //   // deadline. If the counter becomes positive then consume it and return true,
+  //   // otherwise return false
+  //   template <class Clock, class Duration>
+  //   bool WaitUntil(const std::chrono::time_point<Clock, Duration>& deadline) {
+  //     std::unique_lock<std::mutex> lock(mutex_);
+  //     if (!condition_variable_.wait_until(lock, deadline, [this]() {
+  //       return count_ > 0; })) {
+  //       return false;
+  //     }
+
+  //     count_--;
+  //     return true;
+  //   }
+
+  // private:
+  //   std::mutex mutex_;
+  //   std::condition_variable condition_variable_;
+  //   unsigned int count_;
+  // };
 
   class Task {
   public:
@@ -350,12 +393,14 @@ namespace stp {
           }
         }
       }));
+      t_id_ = t_.get_id();
     }
     void Work() {
       if (t_.joinable()) {
         t_.join();
       }
     }
+    std::thread::id getThreadId() { return t_id_; }
     State state() const { return state_; }
     uint64_t completed_task_count() const { return completed_task_count_; }
 
@@ -363,6 +408,7 @@ namespace stp {
     std::thread t_;
     State state_;
     uint64_t completed_task_count_;
+    std::thread::id t_id_;
   };
 
   class ClassifyThreadPool {
@@ -399,6 +445,13 @@ namespace stp {
     const std::vector<std::shared_ptr<Worker> >& workers() const { return workers_; }
     const std::unique_ptr<TaskPriorityQueue<CMPTaskBypriority>>& task_queue() const { return task_queue_; }
 
+    std::thread::id getThreadId() { 
+      if (workers_.empty()) {
+        return std::this_thread::get_id();
+      }
+      return workers_.at(0)->getThreadId();
+    }
+
   private:
     friend class SmartThreadPool;
     void ConnectTaskPriorityQueue() {
@@ -422,6 +475,7 @@ namespace stp {
       }
       return count;
     }
+    
     uint8_t id_;
     std::string name_;
     uint16_t capacity_;
@@ -574,11 +628,27 @@ namespace stp {
       }
     }
 
+    std::string GetThreadIdOfString(const std::thread::id & id)
+    {
+        std::stringstream sin;
+        sin << id;
+        return sin.str();
+    }
+
+    bool IsInThread(std::string pool_name) {
+      auto& pool = pools_.at(pool_name);
+      if (pool) {
+        return std::this_thread::get_id() == pool->getThreadId();
+      }
+      return false;
+    }
+
   private:
     friend class SmartThreadPoolBuilder;
-    friend class Monitor;        
+    friend class Monitor;
     SmartThreadPool(){}
-    std::map<std::string, std::unique_ptr<ClassifyThreadPool> > pools_;    
+    std::map<std::string, std::unique_ptr<ClassifyThreadPool> > pools_;
+    std::map<std::string, std::thread::id > idMap_;
     SheduleWorker sheduleWorker_;
   };
 
@@ -686,6 +756,7 @@ namespace stp {
       auto pool = new ClassifyThreadPool(++g_auto_increment_thread_pool_id, pool_name, capacity, wait_for_task_seconds);
       pool->InitWorkers(init_size);
       smart_pool_->pools_.emplace(pool_name, std::unique_ptr<ClassifyThreadPool>(pool));  
+      smart_pool_->idMap_.emplace(pool_name, pool->getThreadId());
       return *this;
     }
     SmartThreadPoolBuilder& EnableMonitor(const std::chrono::duration<int>& second_period = std::chrono::seconds(60)) {
@@ -706,7 +777,7 @@ namespace stp {
     std::shared_ptr<SmartThreadPool> smart_pool_;
     bool enable_monitor_;
     std::chrono::duration<int> monitor_second_period_;
-        uint8_t g_auto_increment_thread_pool_id = 0;
+    uint8_t g_auto_increment_thread_pool_id = 0;
   };
 
 }   // namespace stp
