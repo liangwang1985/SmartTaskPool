@@ -122,3 +122,8 @@ fabric.properties
 
 
 # End of https://www.gitignore.io/api/c++,cmake,jetbrains,visualstudiocode
+
+example.dSYM
+example_mvc.dSYM
+example
+example_mvc
