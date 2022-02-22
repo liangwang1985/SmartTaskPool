@@ -187,7 +187,7 @@ int main(int argc, char** argv) {
 
   {
     MyPair mypair{ 1, 2 };
-    //无shared_ptr保护的变量，要等待，否则在执行时，mypair可能已被删除，从而会有野崩溃
+    //无shared_ptr保护的变量，要等待，否则在执行时，mypair可能已被删除，从而会有野指针崩溃
     auto res = smartThreadPool->ApplyAsync(SmartThreadCPUFlag, TaskPriority::MEDIUM, std::bind(&MyPair::multiply, mypair));
     printf("multiply result: %f\n", res.get());
     auto res1 = smartThreadPool->ApplyAsync(SmartThreadCPUFlag, TaskPriority::MEDIUM, std::bind(&MyPair::divide, mypair, 1, 2));

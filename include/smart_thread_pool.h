@@ -413,8 +413,8 @@ namespace stp {
 
   class ClassifyThreadPool {
   public:
-    ClassifyThreadPool(uint8_t id, const char* name, uint16_t capacity, int wait_for_task_seconds)
-      : id_(id), name_(name), capacity_(capacity), wait_for_task_seconds_(wait_for_task_seconds) {
+    ClassifyThreadPool(const char* name, uint16_t capacity, int wait_for_task_seconds)
+      : name_(name), capacity_(capacity), wait_for_task_seconds_(wait_for_task_seconds) {
       workers_.reserve(capacity);
       ConnectTaskPriorityQueue();
     }
@@ -429,7 +429,6 @@ namespace stp {
         AddWorker();
       }
     }
-    uint8_t id() const { return id_; }
     const char* name() const { return name_.c_str(); }
     uint16_t capacity() const { return capacity_; }
     uint16_t WorkerCount() const { return workers_.size(); }
@@ -476,7 +475,6 @@ namespace stp {
       return count;
     }
     
-    uint8_t id_;
     std::string name_;
     uint16_t capacity_;
     std::vector<std::shared_ptr<Worker> > workers_;
@@ -753,7 +751,7 @@ namespace stp {
     SmartThreadPoolBuilder& operator=(const SmartThreadPoolBuilder&) = delete;
 
     SmartThreadPoolBuilder& AddClassifyPool(const char* pool_name, uint8_t capacity, uint8_t init_size, int wait_for_task_seconds = 0) {
-      auto pool = new ClassifyThreadPool(++g_auto_increment_thread_pool_id, pool_name, capacity, wait_for_task_seconds);
+      auto pool = new ClassifyThreadPool(pool_name, capacity, wait_for_task_seconds);
       pool->InitWorkers(init_size);
       smart_pool_->pools_.emplace(pool_name, std::unique_ptr<ClassifyThreadPool>(pool));  
       smart_pool_->idMap_.emplace(pool_name, pool->getThreadId());
@@ -777,7 +775,6 @@ namespace stp {
     std::shared_ptr<SmartThreadPool> smart_pool_;
     bool enable_monitor_;
     std::chrono::duration<int> monitor_second_period_;
-    uint8_t g_auto_increment_thread_pool_id = 0;
   };
 
 }   // namespace stp
