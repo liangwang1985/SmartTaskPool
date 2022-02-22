@@ -27,7 +27,7 @@
 
 ## Usage
 
-mvc模型使用线程池拆解示例，example_mvc.cpp：
+- mvc模型使用线程池拆解示例，example_mvc.cpp：
 ```
 /****************************************************************************\
  * Created on Mon Jul 30 2018
@@ -150,6 +150,7 @@ int main(int argc, char** argv) {
 
 ```
 
+- 函数绑定示例，example.cpp：
 ```
 #include "smart_thread_pool.h"
 #include <iostream>
